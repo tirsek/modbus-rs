@@ -1,4 +1,4 @@
-use {Coil, Result};
+use {Coil, ModbusValue, Result};
 
 pub trait Client {
     fn read_discrete_inputs(&mut self, address: u16, quantity: u16) -> Result<Vec<Coil>>;
@@ -12,6 +12,8 @@ pub trait Client {
     fn read_input_registers(&mut self, address: u16, quantity: u16) -> Result<Vec<u16>>;
 
     fn read_holding_registers(&mut self, address: u16, quantity: u16) -> Result<Vec<u16>>;
+
+    fn read_holding_values<T: ModbusValue>(&mut self, addr: u16, count: u16) -> Result<Vec<T>>;
 
     fn write_single_register(&mut self, address: u16, value: u16) -> Result<()>;
 

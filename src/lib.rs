@@ -272,6 +272,44 @@ pub mod mei {
     }
 }
 
+#[derive(Clone, Copy)]
+pub enum ModbusWordOrder {
+    LittleEndian,
+    BigEndian,
+}
+
+pub trait ModbusValue {
+    const REGISTERS_PER_VALUE: usize;
+    fn from_registers(r: Vec<u16>, word_order: ModbusWordOrder) -> Result<Vec<Self>>
+    where
+        Self: Sized;
+}
+
+impl ModbusValue for f32 {
+    const REGISTERS_PER_VALUE: usize = 2;
+
+    fn from_registers(r: Vec<u16>, word_order: ModbusWordOrder) -> Result<Vec<f32>>
+    where
+        Self: Sized,
+    {
+        if r.len() % Self::REGISTERS_PER_VALUE != 0 {
+            return Err(Error::InvalidData(Reason::DecodingError));
+        }
+
+        let mut result = Vec::with_capacity(r.len() / Self::REGISTERS_PER_VALUE);
+
+        for chunk in r.chunks_exact(Self::REGISTERS_PER_VALUE) {
+            let (high_word, low_word) = match word_order {
+                ModbusWordOrder::LittleEndian => (chunk[1], chunk[0]),
+                ModbusWordOrder::BigEndian => (chunk[0], chunk[1]),
+            };
+            result.push(f32::from_bits((high_word as u32) << 16 | (low_word as u32)));
+        }
+
+        Ok(result)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -5,7 +5,10 @@ use std::io::{self, Cursor, Read, Write};
 use std::net::{Shutdown, TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
-use {binary, Client, Coil, Error, ExceptionCode, Function, Reason, Result};
+use {
+    binary, Client, Coil, Error, ExceptionCode, Function, ModbusValue, ModbusWordOrder, Reason,
+    Result,
+};
 
 #[cfg(feature = "read-device-info")]
 use mei;
@@ -28,6 +31,8 @@ pub struct Config {
     pub tcp_write_timeout: Option<Duration>,
     /// The modbus Unit Identifier used in the modbus layer (Default: `1`)
     pub modbus_uid: u8,
+    /// The word order used by this device (Default: `WordOrder::BigEndian`)
+    pub word_order: ModbusWordOrder,
 }
 
 impl Default for Config {
@@ -38,6 +43,7 @@ impl Default for Config {
             tcp_read_timeout: None,
             tcp_write_timeout: None,
             modbus_uid: 1,
+            word_order: ModbusWordOrder::BigEndian,
         }
     }
 }
@@ -85,6 +91,7 @@ pub struct Transport {
     tid: u16,
     uid: u8,
     stream: TcpStream,
+    word_order: ModbusWordOrder,
 }
 
 impl Transport {
@@ -114,6 +121,7 @@ impl Transport {
                     tid: 0,
                     uid: cfg.modbus_uid,
                     stream: s,
+                    word_order: cfg.word_order,
                 })
             }
             Err(e) => Err(e),
@@ -322,6 +330,7 @@ impl Transport {
             tid: self.tid,
             uid: self.uid,
             stream: self.stream.try_clone()?,
+            word_order: self.word_order,
         })
     }
 
@@ -406,6 +415,14 @@ impl Client for Transport {
     fn read_holding_registers(&mut self, addr: u16, count: u16) -> Result<Vec<u16>> {
         let bytes = self.read(&Function::ReadHoldingRegisters(addr, count))?;
         binary::pack_bytes(&bytes[..])
+    }
+
+    fn read_holding_values<T: ModbusValue>(&mut self, addr: u16, count: u16) -> Result<Vec<T>> {
+        let bytes = self.read(&Function::ReadHoldingRegisters(
+            addr,
+            count * T::REGISTERS_PER_VALUE as u16,
+        ))?;
+        T::from_registers(binary::pack_bytes(&bytes[..])?, self.word_order)
     }
 
     /// Read `count` 16bit input registers starting at address `addr`.
